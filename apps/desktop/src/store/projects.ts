@@ -338,15 +338,22 @@ async function gatewayRequest<T>(method: string, params: Record<string, unknown>
     throw new Error('Hermes gateway is not connected')
   }
 
-  return gateway.request<T>(method, params)
+  return gateway.request<T>(method, {
+    ...params,
+    // A unified remote backend reuses the launch profile's primary socket for
+    // every profile. Project RPCs are profile-local, so the selected profile
+    // must ride in the request instead of being inferred from that socket.
+    profile: $activeGatewayProfile.get() || 'default'
+  })
 }
 
 async function gatewayRequestOn<T>(
   gateway: HermesGateway,
   method: string,
-  params: Record<string, unknown> = {}
+  params: Record<string, unknown> = {},
+  profile = $activeGatewayProfile.get() || 'default'
 ): Promise<T> {
-  return gateway.request<T>(method, params)
+  return gateway.request<T>(method, { ...params, profile })
 }
 
 interface ActiveProjectsContext {
@@ -419,7 +426,7 @@ function applyProjectTreePayload(res: ProjectTreePayload): void {
   }
 }
 
-async function refreshProjectTreeOn(gateway: HermesGateway): Promise<void> {
+async function refreshProjectTreeOn(gateway: HermesGateway, profile: string): Promise<void> {
   const generation = ++projectTreeRefreshGeneration
 
   if (activeGateway() === gateway) {
@@ -427,9 +434,12 @@ async function refreshProjectTreeOn(gateway: HermesGateway): Promise<void> {
   }
 
   try {
-    const res = await gatewayRequestOn<ProjectTreePayload>(gateway, 'projects.tree', {
-      preview_limit: PROJECT_TREE_PREVIEW_LIMIT
-    })
+    const res = await gatewayRequestOn<ProjectTreePayload>(
+      gateway,
+      'projects.tree',
+      { preview_limit: PROJECT_TREE_PREVIEW_LIMIT },
+      profile
+    )
 
     if (generation !== projectTreeRefreshGeneration || activeGateway() !== gateway) {
       return
@@ -459,8 +469,8 @@ export async function refreshProjectTree(): Promise<void> {
   }
 
   try {
-    const { gateway } = await activeProjectsContext()
-    await refreshProjectTreeOn(gateway)
+    const { gateway, profile } = await activeProjectsContext()
+    await refreshProjectTreeOn(gateway, profile)
   } catch {
     // Backend may not be ready; keep the last known tree.
   }
@@ -635,10 +645,12 @@ export async function scanAndRecordRepos(force = false): Promise<void> {
     state.runningSignature = signature
 
     if (!policy.enabled) {
-      await gatewayRequestOn(context.gateway, 'projects.record_repos', {
-        discovery_policy: policy,
-        repos: []
-      })
+      await gatewayRequestOn(
+        context.gateway,
+        'projects.record_repos',
+        { discovery_policy: policy, repos: [] },
+        context.profile
+      )
     } else {
       scanningGatewayGenerations.set(context.gateway, generation)
       syncReposScanning()
@@ -652,10 +664,12 @@ export async function scanAndRecordRepos(force = false): Promise<void> {
         return
       }
 
-      await gatewayRequestOn(context.gateway, 'projects.record_repos', {
-        discovery_policy: policy,
-        repos
-      })
+      await gatewayRequestOn(
+        context.gateway,
+        'projects.record_repos',
+        { discovery_policy: policy, repos },
+        context.profile
+      )
     }
 
     if (state.generation !== generation) {

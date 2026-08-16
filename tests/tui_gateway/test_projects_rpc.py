@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -212,6 +213,31 @@ def test_create_list_roundtrip(tmp_path):
     listing = _call("projects.list")
     assert [p["slug"] for p in listing["projects"]] == ["demo"]
     assert listing["active_id"] == created["project"]["id"]
+
+
+def test_project_rpcs_bind_projects_and_state_to_requested_profile(tmp_path):
+    """A shared remote socket must not leak the launch profile's project tree."""
+    from hermes_constants import get_hermes_home
+    from hermes_state import SessionDB
+
+    default = _call("projects.create", {"name": "Default", "folders": [str(tmp_path / "default")]})
+
+    profile_home = Path(get_hermes_home()) / "profiles" / "client-work"
+    profile_home.mkdir(parents=True)
+    SessionDB(db_path=profile_home / "state.db").close()
+
+    client = _call(
+        "projects.create",
+        {"name": "Client", "folders": [str(tmp_path / "client")], "profile": "client-work"},
+    )
+
+    default_listing = _call("projects.list")
+    client_listing = _call("projects.list", {"profile": "client-work"})
+    client_tree = _call("projects.tree", {"profile": "client-work"})
+
+    assert [p["id"] for p in default_listing["projects"]] == [default["project"]["id"]]
+    assert [p["id"] for p in client_listing["projects"]] == [client["project"]["id"]]
+    assert [p["id"] for p in client_tree["projects"]] == [client["project"]["id"]]
 
 
 def test_add_folder_and_for_cwd(tmp_path):

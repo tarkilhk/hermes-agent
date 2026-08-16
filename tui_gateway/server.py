@@ -12342,6 +12342,7 @@ def _projects_method(name: str):
 
     def decorator(fn):
         @method(name)
+        @_profile_scoped
         def handler(rid, params: dict) -> dict:
             try:
                 from hermes_cli import projects_db as pdb

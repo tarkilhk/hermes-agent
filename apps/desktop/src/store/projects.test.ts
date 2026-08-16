@@ -418,6 +418,7 @@ describe('repository discovery policy', () => {
     expect(scanRepos).not.toHaveBeenCalled()
     expect(request).toHaveBeenCalledWith('projects.record_repos', {
       discovery_policy: { enabled: false, exclude_paths: [], roots: [] },
+      profile: 'default',
       repos: []
     })
   })
@@ -453,6 +454,7 @@ describe('repository discovery policy', () => {
         exclude_paths: ['/work/vendor'],
         roots: ['/work']
       },
+      profile: 'default',
       repos: [{ label: 'repo', root: '/work/repo' }]
     })
   })
@@ -470,6 +472,22 @@ describe('repository discovery policy', () => {
 })
 
 describe('project tree profile isolation', () => {
+  it('sends the selected profile on the shared gateway project-tree RPC', async () => {
+    const request = vi.fn().mockResolvedValue({ active_id: null, projects: [], scoped_session_ids: [] })
+    const gateway = { connectionState: 'open', request }
+
+    activeGateway.mockReturnValue(gateway as never)
+    gatewayAtom.set(gateway as never)
+    $activeGatewayProfile.set('client-work')
+
+    await refreshProjectTree()
+
+    expect(request).toHaveBeenCalledWith('projects.tree', {
+      preview_limit: 3,
+      profile: 'client-work'
+    })
+  })
+
   it('does not publish a late response from the previous profile', async () => {
     let resolveA: ((value: unknown) => void) | undefined
 
