@@ -168,6 +168,25 @@ class HostedRoomPolicyCheckpoint:
         events_by_seq = {
             int(event["seq"]): event
             for event in (*map(_event_from_room_row, rows), *(json.loads(row["event_json"]) for row in active_rows))}
+        # Retained reply/settlement pairs can outlive their source user message.
+        # Restore those validation dependencies without widening visible retention.
+        source_ids = {
+            str(event["payload"]["discussion_event_id"])
+            for event in events_by_seq.values()
+            if event["kind"] == "turn.settled" and not event["payload"]["passed"]
+        } - {event["event_id"] for event in events_by_seq.values()}
+        if source_ids:
+            placeholders = ",".join("?" for _ in source_ids)
+            source_rows = conn.execute(
+                f"SELECT {_ROOM_EVENT_COLUMNS} FROM hosted_room_events "
+                f"WHERE room_id=? AND event_id IN ({placeholders}) AND kind='message.user'",
+                (room_id, *sorted(source_ids))).fetchall()
+            if len(source_rows) != len(source_ids):
+                raise RuntimeError("retained room settlement source is missing from the durable log")
+            # One source per bounded settlement; admissions and frozen inputs stay intact.
+            for row in source_rows:
+                source = _event_from_room_row(row)
+                events_by_seq[int(source["seq"])] = source
         return [events_by_seq[seq] for seq in sorted(events_by_seq)]
 
     # -- per-kind projection handlers (dispatched by _apply_event) -----------
