@@ -1,0 +1,26 @@
+name: button-actions
+repo: https://github.com/tarkilhk/hermes-button-actions
+sha: 4f1935db539d6f63392c88977d4680af3bc9f69b
+version: "0.2.0"
+title: Telegram Button Actions
+description: >-
+  Scoped Telegram callback actions through trusted Python integrations, with an
+  opt-in demo and optional Reminder Inbox provider. Disclosure: runs in-process,
+  calls private Telegram authorization helpers, uses the host bot for feedback,
+  and can invoke a configured local Reminder Inbox CLI to confirm or cancel drafts.
+maintainer: tarkilhk
+tier: community
+category: automation
+requires_hermes: ">=0.23.0"
+docs_url: https://github.com/tarkilhk/hermes-button-actions#readme
+readme: true
+platforms: [linux]
+known_issues:
+  - Requires in-process plugin isolation; native handler factories do not support host isolation.
+  - Depends on private Telegram adapter authorization helpers; retest on Hermes upgrades.
+  - Timeouts may leave a domain action outcome unknown; inspect state before retrying.
+capabilities:
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []
